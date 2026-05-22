@@ -1,5 +1,5 @@
-import SolicitudesView from "./SolicitudesView";
+import SolicitudesClient from "./SolicitudesClient";
 
 export default function SolicitudesPage() {
-  return <SolicitudesView />;
+  return <SolicitudesClient />;
 }

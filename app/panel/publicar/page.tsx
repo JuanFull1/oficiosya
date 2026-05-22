@@ -1,5 +1,5 @@
-import PublicarView from "./PublicarView";
+import PublicarClient from "./PublicarClient";
 
-export default function Page() {
-  return <PublicarView />;
+export default function PublicarPage() {
+  return <PublicarClient />;
 }
