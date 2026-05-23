@@ -30,6 +30,7 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 
 type PuntoMapa = {
   lat: number | null;
@@ -514,20 +515,20 @@ export default function SeguimientoView() {
 
     const ultima = ultimaSubidaRef.current;
 
-const pasaronDiezSegundos = ahoraMs - ultima.tiempo >= 10000;
+    const pasaronDiezSegundos = ahoraMs - ultima.tiempo >= 10000;
 
-const distancia =
-  ultima.lat !== null && ultima.lng !== null
-    ? distanciaMetros(ultima.lat, ultima.lng, lat, lng)
-    : 9999;
+    const distancia =
+      ultima.lat !== null && ultima.lng !== null
+        ? distanciaMetros(ultima.lat, ultima.lng, lat, lng)
+        : 9999;
 
-const seMovioSuficiente = distancia >= 10;
+    const seMovioSuficiente = distancia >= 10;
 
-const esPrimeraUbicacion = ultima.lat === null || ultima.lng === null;
+    const esPrimeraUbicacion = ultima.lat === null || ultima.lng === null;
 
-if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
-  return;
-}
+    if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
+      return;
+    }
 
     const ahora = new Date().toISOString();
 
@@ -1003,11 +1004,15 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
 
               <div className="flex items-center gap-4">
                 {personaMostrada?.foto_url ? (
-                  <img
-                    src={personaMostrada.foto_url}
-                    alt={nombrePersona}
-                    className="h-16 w-16 rounded-2xl object-cover"
-                  />
+                  <div className="relative h-16 w-16 overflow-hidden rounded-2xl">
+                    <Image
+                      src={personaMostrada.foto_url}
+                      alt={nombrePersona}
+                      fill
+                      className="object-cover"
+                      sizes="64px"
+                    />
+                  </div>
                 ) : (
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                     <UserRound size={30} />
@@ -1092,30 +1097,30 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
               </div>
 
               <div className="mt-4 grid gap-3">
-              {esClienteEnEsteServicio &&
-  servicio.estado !== "en_curso" &&
-  servicio.estado !== "finalizado" &&
-  servicio.estado !== "cancelado" && (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <button
-        onClick={abrirModalUbicacion}
-        disabled={procesando}
-        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-      >
-        <MapPin size={17} />
-        Editar ubicación
-      </button>
+                {esClienteEnEsteServicio &&
+                  servicio.estado !== "en_curso" &&
+                  servicio.estado !== "finalizado" &&
+                  servicio.estado !== "cancelado" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button
+                        onClick={abrirModalUbicacion}
+                        disabled={procesando}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        <MapPin size={17} />
+                        Editar ubicación
+                      </button>
 
-      <button
-        onClick={solicitarCancelarServicio}
-        disabled={procesando}
-        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
-      >
-        <XCircle size={17} />
-        Cancelar servicio
-      </button>
-    </div>
-  )}
+                      <button
+                        onClick={solicitarCancelarServicio}
+                        disabled={procesando}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+                      >
+                        <XCircle size={17} />
+                        Cancelar servicio
+                      </button>
+                    </div>
+                  )}
 
                 {esTrabajadorEnEsteServicio &&
                   servicio.estado === "confirmado" && (
@@ -1171,6 +1176,7 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
         </section>
       </main>
 
+      {/* Modal Cancelar Servicio */}
       {modalCancelarAbierto && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div
@@ -1227,8 +1233,9 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
         </div>
       )}
 
+      {/* Modal Editar Ubicación - CORREGIDO PARA MÓVIL */}
       {modalUbicacionAbierto && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => {
@@ -1236,13 +1243,16 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
             }}
           />
 
-          <div className="relative w-full max-w-3xl overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+          {/* Modal con scroll en móvil */}
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[26px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
+            
+            {/* Header sticky */}
+            <div className={`sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white p-4 sm:p-5`}>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">
                   Editar ubicación del servicio
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-xs sm:text-sm text-slate-500">
                   Marca un nuevo punto en el mapa. El trabajador verá el cambio
                   automáticamente.
                 </p>
@@ -1252,13 +1262,14 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
                 type="button"
                 disabled={guardandoUbicacion}
                 onClick={() => setModalUbicacionAbierto(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+                className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="p-5">
+            {/* Contenido con scroll interno */}
+            <div className="p-4 sm:p-5">
               <div className="mb-4">
                 <label className="text-sm font-bold text-slate-900">
                   Referencia de ubicación
@@ -1272,8 +1283,9 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
                 />
               </div>
 
+              {/* Mapa con altura responsive */}
               <div className="overflow-hidden rounded-[24px] border border-slate-200">
-                <div className="h-[360px]">
+                <div className="h-[40vh] sm:h-[360px]">
                   <MapContainer
                     center={[
                       nuevaUbicacion?.lat || clienteLat || -1.24908,
@@ -1281,6 +1293,7 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
                     ]}
                     zoom={nuevaUbicacion ? 17 : 13}
                     className="h-full w-full"
+                    style={{ zIndex: 0 }}
                   >
                     <TileLayer
                       attribution="&copy; OpenStreetMap"
@@ -1297,26 +1310,27 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
                 </div>
               </div>
 
-              <div className="mt-3 text-sm font-medium text-slate-500">
+              <div className="mt-3 text-xs sm:text-sm font-medium text-slate-500">
                 {nuevaUbicacion ? (
                   <span>
                     Coordenadas seleccionadas:{" "}
-                    {nuevaUbicacion.lat.toFixed(7)},{" "}
-                    {nuevaUbicacion.lng.toFixed(7)}
+                    {nuevaUbicacion.lat.toFixed(6)},{" "}
+                    {nuevaUbicacion.lng.toFixed(6)}
                   </span>
                 ) : (
                   <span>Haz clic en el mapa o usa tu ubicación actual.</span>
                 )}
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {/* Botones responsivos */}
+              <div className="mt-5 grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-3">
                 <button
                   type="button"
                   onClick={usarMiUbicacionCliente}
                   disabled={ubicandoCliente || guardandoUbicacion}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
                 >
-                  <LocateFixed size={17} />
+                  <LocateFixed size={16} />
                   {ubicandoCliente ? "Ubicando..." : "Mi ubicación"}
                 </button>
 
@@ -1324,7 +1338,7 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
                   type="button"
                   onClick={() => setModalUbicacionAbierto(false)}
                   disabled={guardandoUbicacion}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 >
                   Cancelar
                 </button>
@@ -1333,9 +1347,9 @@ if (!esPrimeraUbicacion && (!pasaronDiezSegundos || !seMovioSuficiente)) {
                   type="button"
                   onClick={guardarNuevaUbicacionServicio}
                   disabled={guardandoUbicacion || !nuevaUbicacion}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0B3C7F] px-4 py-3 text-sm font-semibold text-white hover:bg-[#092f63] disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0B3C7F] px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-semibold text-white hover:bg-[#092f63] disabled:opacity-60"
                 >
-                  <Check size={17} />
+                  <Check size={16} />
                   {guardandoUbicacion ? "Guardando..." : "Guardar ubicación"}
                 </button>
               </div>

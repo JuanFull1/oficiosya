@@ -1565,187 +1565,183 @@ if (!puedePublicar) {
           </div>
         </div>
       </section>
+{modalMapaAbierto && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
+    <div
+      className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+      onClick={() => setModalMapaAbierto(false)}
+    />
 
-      {modalMapaAbierto && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setModalMapaAbierto(false)}
+    {/* Modal con scroll */}
+    <div className={`relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[24px] border shadow-[0_30px_80px_rgba(0,0,0,0.35)] ${
+      modoOscuro
+        ? "bg-[#111827] border-[#334155]"
+        : "bg-white border-gray-200"
+    }`}>
+      
+      {/* Header - sticky para que siempre visible */}
+      <div className={`sticky top-0 z-10 flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b ${estilos.borde} ${
+        modoOscuro ? "bg-[#111827]" : "bg-white"
+      }`}>
+        <div>
+          <h3 className={`text-lg sm:text-xl font-extrabold ${estilos.textoPrincipal}`}>
+            Seleccionar ubicación
+          </h3>
+          <p className={`text-xs sm:text-sm ${estilos.textoSecundario}`}>
+            Toca el mapa para marcar el punto del servicio.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setModalMapaAbierto(false)}
+          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition shrink-0 ${
+            modoOscuro
+              ? "bg-[#1e293b] text-white hover:bg-[#263449]"
+              : "bg-[#f0f2f5] text-gray-700 hover:bg-[#e4e6eb]"
+          }`}
+        >
+          <X className="w-4 h-4 sm:w-5 sm:h-5" />
+        </button>
+      </div>
+
+      {/* Mapa con altura responsive */}
+      <div className="h-[40vh] sm:h-[420px] relative z-0">
+        <MapContainer
+          center={[centroMapa.lat, centroMapa.lng]}
+          zoom={14}
+          scrollWheelZoom
+          className="h-full w-full z-0"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <div
-            className={`relative w-full max-w-4xl overflow-hidden rounded-[24px] border shadow-[0_30px_80px_rgba(0,0,0,0.35)] ${
-              modoOscuro
-                ? "bg-[#111827] border-[#334155]"
-                : "bg-white border-gray-200"
-            }`}
-          >
-            <div
-              className={`flex items-center justify-between gap-3 px-5 py-4 border-b ${estilos.borde}`}
+          <RecentrarMapa posicion={posicionMapa} />
+
+          <SelectorMapa
+            posicion={posicionMapa}
+            setPosicion={(posicion) => {
+              setPosicionMapa(posicion);
+              setUbicacionConfirmada(false);
+              limpiarAdvertenciaMapa();
+            }}
+          />
+        </MapContainer>
+      </div>
+
+      {/* Footer con botones siempre accesibles */}
+      <div className={`flex flex-col gap-3 p-4 sm:p-5 pt-4 border-t ${estilos.borde}`}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <p className={`text-xs sm:text-sm ${estilos.textoSecundario} break-all`}>
+              {posicionMapa
+                ? `${posicionMapa.lat.toFixed(6)}, ${posicionMapa.lng.toFixed(6)}`
+                : "Aún no has marcado una ubicación."}
+            </p>
+
+            {ubicacionDetectada && (
+              <p className={`text-xs mt-1 ${estilos.textoSecundario}`}>
+                Detectado:{" "}
+                {[
+                  ubicacionDetectada.parroquia,
+                  ubicacionDetectada.canton,
+                  ubicacionDetectada.provincia,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "No identificado"}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={usarMiUbicacion}
+              disabled={ubicando || verificandoZona}
+              className={`rounded-2xl border px-4 py-2.5 sm:px-5 sm:py-3 text-sm sm:text-base font-bold transition disabled:opacity-60 flex items-center justify-center gap-2 ${
+                modoOscuro
+                  ? "border-[#334155] bg-[#0f172a] text-white hover:bg-[#1e293b]"
+                  : "border-gray-200 bg-white text-[#0B3C7F] hover:bg-[#f5f9ff]"
+              }`}
             >
-              <div>
-                <h3
-                  className={`text-xl font-extrabold ${estilos.textoPrincipal}`}
-                >
-                  Seleccionar ubicación
-                </h3>
-                <p className={`text-sm ${estilos.textoSecundario}`}>
-                  Toca el mapa para marcar el punto del servicio.
-                </p>
-              </div>
-
-              <button
-                onClick={() => setModalMapaAbierto(false)}
-                className={`w-11 h-11 rounded-full flex items-center justify-center transition ${
-                  modoOscuro
-                    ? "bg-[#1e293b] text-white hover:bg-[#263449]"
-                    : "bg-[#f0f2f5] text-gray-700 hover:bg-[#e4e6eb]"
-                }`}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="h-[420px] relative z-0">
-              <MapContainer
-                center={[centroMapa.lat, centroMapa.lng]}
-                zoom={14}
-                scrollWheelZoom
-                className="h-full w-full z-0"
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-
-                <RecentrarMapa posicion={posicionMapa} />
-
-                <SelectorMapa
-                  posicion={posicionMapa}
-                  setPosicion={(posicion) => {
-                    setPosicionMapa(posicion);
-                    setUbicacionConfirmada(false);
-                    limpiarAdvertenciaMapa();
-                  }}
-                />
-              </MapContainer>
-            </div>
-
-            <div
-              className={`flex flex-col gap-3 p-5 border-t ${estilos.borde}`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <p className={`text-sm ${estilos.textoSecundario}`}>
-                    {posicionMapa
-                      ? `${posicionMapa.lat.toFixed(
-                          7
-                        )}, ${posicionMapa.lng.toFixed(7)}`
-                      : "Aún no has marcado una ubicación."}
-                  </p>
-
-                  {ubicacionDetectada && (
-                    <p className={`text-xs mt-1 ${estilos.textoSecundario}`}>
-                      Detectado:{" "}
-                      {[
-                        ubicacionDetectada.parroquia,
-                        ubicacionDetectada.canton,
-                        ubicacionDetectada.provincia,
-                      ]
-                        .filter(Boolean)
-                        .join(", ") || "No identificado"}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    type="button"
-                    onClick={usarMiUbicacion}
-                    disabled={ubicando || verificandoZona}
-                    className={`rounded-2xl border px-5 py-3 font-bold transition disabled:opacity-60 flex items-center justify-center gap-2 ${
-                      modoOscuro
-                        ? "border-[#334155] bg-[#0f172a] text-white hover:bg-[#1e293b]"
-                        : "border-gray-200 bg-white text-[#0B3C7F] hover:bg-[#f5f9ff]"
-                    }`}
-                  >
-                    {ubicando ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <LocateFixed className="w-5 h-5" />
-                    )}
-                    Mi ubicación
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={confirmarUbicacion}
-                    disabled={verificandoZona}
-                    className="rounded-2xl bg-[#0B3C7F] text-white px-5 py-3 font-bold hover:bg-[#092f63] transition disabled:opacity-60 flex items-center justify-center gap-2"
-                  >
-                    {verificandoZona ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Check className="w-5 h-5" />
-                    )}
-                    {verificandoZona ? "Verificando..." : "Confirmar"}
-                  </button>
-                </div>
-              </div>
-
-              {advertenciaZona && (
-                <div
-                  className={`rounded-2xl border px-4 py-3 ${
-                    modoOscuro
-                      ? "border-yellow-700 bg-yellow-950/30"
-                      : "border-yellow-200 bg-yellow-50"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p
-                        className={`text-sm font-medium ${
-                          modoOscuro ? "text-yellow-100" : "text-yellow-800"
-                        }`}
-                      >
-                        {advertenciaZona}
-                      </p>
-
-                      {permitirZonaDiferente && (
-                        <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                          <button
-                            type="button"
-                            onClick={usarUbicacionAunqueNoCoincida}
-                            className="rounded-xl bg-[#0B3C7F] text-white px-4 py-2 text-sm font-bold hover:bg-[#092f63] transition"
-                          >
-                            Usar ubicación marcada
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAdvertenciaZona("");
-                              setPermitirZonaDiferente(false);
-                            }}
-                            className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
-                              modoOscuro
-                                ? "border-[#334155] text-white hover:bg-[#1e293b]"
-                                : "border-gray-200 text-[#0B3C7F] hover:bg-white"
-                            }`}
-                          >
-                            Corregir punto
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              {ubicando ? (
+                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+              ) : (
+                <LocateFixed className="w-4 h-4 sm:w-5 sm:h-5" />
               )}
-            </div>
+              <span>Mi ubicación</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={confirmarUbicacion}
+              disabled={verificandoZona}
+              className="rounded-2xl bg-[#0B3C7F] text-white px-4 py-2.5 sm:px-5 sm:py-3 text-sm sm:text-base font-bold hover:bg-[#092f63] transition disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {verificandoZona ? (
+                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+              )}
+              <span>{verificandoZona ? "Verificando..." : "Confirmar"}</span>
+            </button>
           </div>
         </div>
-      )}
+
+        {advertenciaZona && (
+          <div
+            className={`rounded-2xl border px-4 py-3 ${
+              modoOscuro
+                ? "border-yellow-700 bg-yellow-950/30"
+                : "border-yellow-200 bg-yellow-50"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p
+                  className={`text-sm font-medium ${
+                    modoOscuro ? "text-yellow-100" : "text-yellow-800"
+                  }`}
+                >
+                  {advertenciaZona}
+                </p>
+
+                {permitirZonaDiferente && (
+                  <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={usarUbicacionAunqueNoCoincida}
+                      className="rounded-xl bg-[#0B3C7F] text-white px-4 py-2 text-sm font-bold hover:bg-[#092f63] transition"
+                    >
+                      Usar ubicación marcada
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdvertenciaZona("");
+                        setPermitirZonaDiferente(false);
+                      }}
+                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                        modoOscuro
+                          ? "border-[#334155] text-white hover:bg-[#1e293b]"
+                          : "border-gray-200 text-[#0B3C7F] hover:bg-white"
+                      }`}
+                    >
+                      Corregir punto
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       {solicitudPublicada && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">

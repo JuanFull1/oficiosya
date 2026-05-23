@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode, useCallback } from "react";
 import {
   AlertCircle,
   Award,
   CalendarDays,
   CheckCircle2,
-  ClipboardList,
+  MapPin,
   MessageSquare,
   RefreshCw,
   Search,
@@ -14,9 +14,11 @@ import {
   ShieldCheck,
   Star,
   UserRound,
+  DollarSign,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { usePanelContext } from "../PanelLayout";
+import Image from "next/image";
 
 type TabResenas = "pendientes" | "recibidas" | "realizadas";
 
@@ -42,7 +44,7 @@ type ServicioInfo = {
   solicitud_id: string;
   cliente_id: string;
   trabajador_id: string;
-  estado: "confirmado" | "en_camino" | "en_curso" | "finalizado" | "cancelado";
+  estado: string;
   finalizado_en: string | null;
   creado_en: string;
   solicitud: SolicitudInfo | null;
@@ -68,15 +70,6 @@ type FormularioResena = {
   comentario: string;
 };
 
-type CacheResenas = {
-  usuarioId: string;
-  servicios: ServicioInfo[];
-  resenasRecibidas: ResenaInfo[];
-  resenasRealizadas: ResenaInfo[];
-};
-
-const CACHE_KEY = "oficiosya-resenas-cache";
-
 export default function ResenasView() {
   const { estilos, modoOscuro } = usePanelContext();
 
@@ -85,40 +78,44 @@ export default function ResenasView() {
   const [servicios, setServicios] = useState<ServicioInfo[]>([]);
   const [resenasRecibidas, setResenasRecibidas] = useState<ResenaInfo[]>([]);
   const [resenasRealizadas, setResenasRealizadas] = useState<ResenaInfo[]>([]);
-  const [formularios, setFormularios] = useState<Record<string, FormularioResena>>(
-    {}
-  );
+  const [formularios, setFormularios] = useState<Record<string, FormularioResena>>({});
   const [busqueda, setBusqueda] = useState("");
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [actualizando, setActualizando] = useState(false);
   const [guardandoId, setGuardandoId] = useState<string | null>(null);
 
-  const guardarCache = (data: CacheResenas) => {
+  const actualizarPromedioTrabajador = async (trabajadorId: string) => {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-    } catch {
-      console.warn("No se pudo guardar el caché de reseñas.");
+      const { data: resenas, error: fetchError } = await supabase
+        .from("resenas")
+        .select("puntuacion")
+        .eq("usuario_calificado_id", trabajadorId);
+
+      if (fetchError) return;
+
+      let nuevoPromedio = 0;
+      const cantidadResenas = resenas?.length || 0;
+      
+      if (resenas && cantidadResenas > 0) {
+        const suma = resenas.reduce((acc, r) => acc + (r.puntuacion || 0), 0);
+        nuevoPromedio = Number((suma / cantidadResenas).toFixed(2));
+      }
+
+      await supabase
+        .from("perfiles_trabajador")
+        .update({
+          calificacion_promedio: nuevoPromedio,
+          servicios_completados: cantidadResenas,
+          actualizado_en: new Date().toISOString(),
+        })
+        .eq("usuario_id", trabajadorId);
+    } catch (error) {
+      console.error("Error actualizando promedio:", error);
     }
   };
 
-  const cargarCache = () => {
-    try {
-      const cache = localStorage.getItem(CACHE_KEY);
-      if (!cache) return;
-
-      const data = JSON.parse(cache) as CacheResenas;
-
-      setUsuarioId(data.usuarioId || "");
-      setServicios(data.servicios || []);
-      setResenasRecibidas(data.resenasRecibidas || []);
-      setResenasRealizadas(data.resenasRealizadas || []);
-    } catch {
-      console.warn("No se pudo leer el caché de reseñas.");
-    }
-  };
-
-  const cargarResenas = async () => {
+  const cargarResenas = useCallback(async () => {
     try {
       setActualizando(true);
       setError("");
@@ -136,200 +133,184 @@ export default function ResenasView() {
 
       setUsuarioId(user.id);
 
-      const [serviciosRes, recibidasRes, realizadasRes] = await Promise.all([
-        supabase
-          .from("servicios")
-          .select(
-            `
-            id,
-            solicitud_id,
-            cliente_id,
-            trabajador_id,
-            estado,
-            finalizado_en,
-            creado_en,
-            solicitud:solicitudes_servicio (
-              id,
-              titulo,
-              descripcion,
-              zona,
-              presupuesto,
-              fecha_preferida
-            ),
-            cliente:perfiles!servicios_cliente_id_fkey (
-              id,
-              nombre_completo,
-              foto_url,
-              zona,
-              verificado
-            ),
-            trabajador:perfiles!servicios_trabajador_id_fkey (
-              id,
-              nombre_completo,
-              foto_url,
-              zona,
-              verificado
-            )
-          `
-          )
-          .eq("estado", "finalizado")
-          .or(`cliente_id.eq.${user.id},trabajador_id.eq.${user.id}`)
-          .order("finalizado_en", { ascending: false }),
+      const { data: serviciosData, error: serviciosError } = await supabase
+        .from("servicios")
+        .select("id, solicitud_id, cliente_id, trabajador_id, estado, finalizado_en, creado_en")
+        .eq("estado", "finalizado")
+        .or(`cliente_id.eq.${user.id},trabajador_id.eq.${user.id}`)
+        .order("finalizado_en", { ascending: false });
 
-        supabase
-          .from("resenas")
-          .select(
-            `
-            id,
-            servicio_id,
-            autor_id,
-            usuario_calificado_id,
-            puntuacion,
-            comentario,
-            creado_en,
-            autor:perfiles!resenas_autor_id_fkey (
-              id,
-              nombre_completo,
-              foto_url,
-              zona,
-              verificado
-            ),
-            servicio:servicios (
-              id,
-              solicitud_id,
-              cliente_id,
-              trabajador_id,
-              estado,
-              finalizado_en,
-              creado_en,
-              solicitud:solicitudes_servicio (
-                id,
-                titulo,
-                descripcion,
-                zona,
-                presupuesto,
-                fecha_preferida
-              )
-            )
-          `
-          )
-          .eq("usuario_calificado_id", user.id)
-          .order("creado_en", { ascending: false }),
-
-        supabase
-          .from("resenas")
-          .select(
-            `
-            id,
-            servicio_id,
-            autor_id,
-            usuario_calificado_id,
-            puntuacion,
-            comentario,
-            creado_en,
-            usuario_calificado:perfiles!resenas_usuario_calificado_id_fkey (
-              id,
-              nombre_completo,
-              foto_url,
-              zona,
-              verificado
-            ),
-            servicio:servicios (
-              id,
-              solicitud_id,
-              cliente_id,
-              trabajador_id,
-              estado,
-              finalizado_en,
-              creado_en,
-              solicitud:solicitudes_servicio (
-                id,
-                titulo,
-                descripcion,
-                zona,
-                presupuesto,
-                fecha_preferida
-              )
-            )
-          `
-          )
-          .eq("autor_id", user.id)
-          .order("creado_en", { ascending: false }),
-      ]);
-
-      if (serviciosRes.error) {
-        console.error("Error al cargar servicios finalizados:", serviciosRes.error);
-        setError("No se pudieron cargar los servicios finalizados.");
+      if (serviciosError) {
+        setError(`Error al cargar servicios: ${serviciosError.message}`);
         return;
       }
 
-      if (recibidasRes.error) {
-        console.error("Error al cargar reseñas recibidas:", recibidasRes.error);
-        setError("No se pudieron cargar las reseñas recibidas.");
+      if (!serviciosData || serviciosData.length === 0) {
+        setServicios([]);
+        setResenasRecibidas([]);
+        setResenasRealizadas([]);
+        setMensaje("No tienes servicios finalizados.");
         return;
       }
 
-      if (realizadasRes.error) {
-        console.error("Error al cargar reseñas realizadas:", realizadasRes.error);
-        setError("No se pudieron cargar las reseñas realizadas.");
-        return;
+      const solicitudIds = serviciosData.map(s => s.solicitud_id).filter((id): id is string => Boolean(id));
+      const solicitudesMap = new Map();
+      
+      if (solicitudIds.length > 0) {
+        const { data: solicitudesData } = await supabase
+          .from("solicitudes_servicio")
+          .select("id, titulo, descripcion, zona, presupuesto, fecha_preferida")
+          .in("id", solicitudIds);
+        
+        solicitudesData?.forEach(s => solicitudesMap.set(s.id, s));
       }
 
-      const cacheData: CacheResenas = {
-        usuarioId: user.id,
-        servicios: (serviciosRes.data || []) as unknown as ServicioInfo[],
-        resenasRecibidas: (recibidasRes.data || []) as unknown as ResenaInfo[],
-        resenasRealizadas: (realizadasRes.data || []) as unknown as ResenaInfo[],
-      };
+      const userIds = new Set<string>();
+      serviciosData.forEach(s => {
+        if (s.cliente_id) userIds.add(s.cliente_id);
+        if (s.trabajador_id) userIds.add(s.trabajador_id);
+      });
 
-      setServicios(cacheData.servicios);
-      setResenasRecibidas(cacheData.resenasRecibidas);
-      setResenasRealizadas(cacheData.resenasRealizadas);
+      const perfilesMap = new Map();
+      if (userIds.size > 0) {
+        const { data: perfilesData } = await supabase
+          .from("perfiles")
+          .select("id, nombre_completo, foto_url, zona, verificado")
+          .in("id", Array.from(userIds));
+        
+        perfilesData?.forEach(p => perfilesMap.set(p.id, p));
+      }
 
-      guardarCache(cacheData);
+      const serviciosCompletos: ServicioInfo[] = serviciosData.map(servicio => ({
+        ...servicio,
+        solicitud: solicitudesMap.get(servicio.solicitud_id) || null,
+        cliente: perfilesMap.get(servicio.cliente_id) || null,
+        trabajador: perfilesMap.get(servicio.trabajador_id) || null
+      }));
+
+      setServicios(serviciosCompletos);
+
+      const { data: recibidasData } = await supabase
+        .from("resenas")
+        .select("id, servicio_id, autor_id, usuario_calificado_id, puntuacion, comentario, creado_en")
+        .eq("usuario_calificado_id", user.id)
+        .order("creado_en", { ascending: false });
+
+      let recibidasConAutor: ResenaInfo[] = [];
+      if (recibidasData && recibidasData.length > 0) {
+        const autorIds = recibidasData.map(r => r.autor_id).filter((id): id is string => Boolean(id));
+        
+        if (autorIds.length > 0) {
+          const { data: autoresData } = await supabase
+            .from("perfiles")
+            .select("id, nombre_completo, foto_url, zona, verificado")
+            .in("id", autorIds);
+          
+          const autoresMap = new Map();
+          autoresData?.forEach(a => autoresMap.set(a.id, a));
+          
+          recibidasConAutor = recibidasData.map(resena => ({
+            ...resena,
+            autor: autoresMap.get(resena.autor_id) || null
+          })) as ResenaInfo[];
+        }
+      }
+      setResenasRecibidas(recibidasConAutor);
+
+      const { data: realizadasData } = await supabase
+        .from("resenas")
+        .select("id, servicio_id, autor_id, usuario_calificado_id, puntuacion, comentario, creado_en")
+        .eq("autor_id", user.id)
+        .order("creado_en", { ascending: false });
+
+      let realizadasConCalificado: ResenaInfo[] = [];
+      if (realizadasData && realizadasData.length > 0) {
+        const calificadoIds = realizadasData.map(r => r.usuario_calificado_id).filter((id): id is string => Boolean(id));
+        
+        if (calificadoIds.length > 0) {
+          const { data: calificadosData } = await supabase
+            .from("perfiles")
+            .select("id, nombre_completo, foto_url, zona, verificado")
+            .in("id", calificadoIds);
+          
+          const calificadosMap = new Map();
+          calificadosData?.forEach(c => calificadosMap.set(c.id, c));
+          
+          realizadasConCalificado = realizadasData.map(resena => ({
+            ...resena,
+            usuario_calificado: calificadosMap.get(resena.usuario_calificado_id) || null
+          })) as ResenaInfo[];
+        }
+
+        const serviciosIds = realizadasConCalificado.map(r => r.servicio_id).filter((id): id is string => Boolean(id));
+        if (serviciosIds.length > 0) {
+          const { data: serviciosResenasData } = await supabase
+            .from("servicios")
+            .select("id, solicitud_id, cliente_id, trabajador_id, estado, finalizado_en, creado_en")
+            .in("id", serviciosIds);
+
+          if (serviciosResenasData) {
+            const solicitudIdsResenas = serviciosResenasData.map(s => s.solicitud_id).filter((id): id is string => Boolean(id));
+            const solicitudesResenasMap = new Map();
+            
+            if (solicitudIdsResenas.length > 0) {
+              const { data: solicitudesResenasData } = await supabase
+                .from("solicitudes_servicio")
+                .select("id, titulo, descripcion, zona, presupuesto, fecha_preferida")
+                .in("id", solicitudIdsResenas);
+              
+              solicitudesResenasData?.forEach(s => solicitudesResenasMap.set(s.id, s));
+            }
+            
+            const serviciosResenasMap = new Map();
+            serviciosResenasData.forEach(servicio => {
+              serviciosResenasMap.set(servicio.id, {
+                ...servicio,
+                solicitud: solicitudesResenasMap.get(servicio.solicitud_id) || null
+              });
+            });
+            
+            realizadasConCalificado.forEach(resena => {
+              resena.servicio = serviciosResenasMap.get(resena.servicio_id) || null;
+            });
+          }
+        }
+      }
+      setResenasRealizadas(realizadasConCalificado);
+
     } catch (error) {
-      console.error("Error inesperado al cargar reseñas:", error);
-      setError("No se pudieron actualizar las reseñas.");
+      console.error("Error cargando reseñas:", error);
+      setError("No se pudieron cargar los datos.");
     } finally {
       setActualizando(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      cargarCache();
-      cargarResenas();
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, []);
+    cargarResenas();
+  }, [cargarResenas]);
 
   const serviciosPendientes = useMemo(() => {
     const serviciosYaResenados = new Set(
       resenasRealizadas.map((resena) => resena.servicio_id)
     );
-
     return servicios.filter((servicio) => !serviciosYaResenados.has(servicio.id));
   }, [servicios, resenasRealizadas]);
 
   const promedioRecibido = useMemo(() => {
     if (resenasRecibidas.length === 0) return 0;
-
     const total = resenasRecibidas.reduce(
       (suma, resena) => suma + Number(resena.puntuacion || 0),
       0
     );
-
-    return total / resenasRecibidas.length;
+    return Number((total / resenasRecibidas.length).toFixed(1));
   }, [resenasRecibidas]);
 
   const porcentajePositivas = useMemo(() => {
     if (resenasRecibidas.length === 0) return 0;
-
     const positivas = resenasRecibidas.filter(
       (resena) => Number(resena.puntuacion) >= 4
     ).length;
-
     return Math.round((positivas / resenasRecibidas.length) * 100);
   }, [resenasRecibidas]);
 
@@ -360,10 +341,9 @@ export default function ResenasView() {
 
     return resenasRecibidas.filter((resena) => {
       const autor = resena.autor?.nombre_completo?.toLowerCase() || "";
-      const titulo = resena.servicio?.solicitud?.titulo?.toLowerCase() || "";
       const comentario = resena.comentario?.toLowerCase() || "";
-
-      return autor.includes(texto) || titulo.includes(texto) || comentario.includes(texto);
+      const titulo = resena.servicio?.solicitud?.titulo?.toLowerCase() || "";
+      return autor.includes(texto) || comentario.includes(texto) || titulo.includes(texto);
     });
   }, [busqueda, resenasRecibidas]);
 
@@ -372,25 +352,17 @@ export default function ResenasView() {
     if (!texto) return resenasRealizadas;
 
     return resenasRealizadas.filter((resena) => {
-      const usuarioCalificado =
-        resena.usuario_calificado?.nombre_completo?.toLowerCase() || "";
+      const usuarioCalificado = resena.usuario_calificado?.nombre_completo?.toLowerCase() || "";
       const titulo = resena.servicio?.solicitud?.titulo?.toLowerCase() || "";
       const comentario = resena.comentario?.toLowerCase() || "";
-
-      return (
-        usuarioCalificado.includes(texto) ||
-        titulo.includes(texto) ||
-        comentario.includes(texto)
-      );
+      return usuarioCalificado.includes(texto) || titulo.includes(texto) || comentario.includes(texto);
     });
   }, [busqueda, resenasRealizadas]);
 
   const formatearFecha = (fecha: string | null) => {
     if (!fecha) return "Sin fecha";
-
     const valor = new Date(fecha);
     if (Number.isNaN(valor.getTime())) return "Sin fecha";
-
     return valor.toLocaleDateString("es-EC", {
       day: "2-digit",
       month: "short",
@@ -398,9 +370,29 @@ export default function ResenasView() {
     });
   };
 
+  const formatearPresupuesto = (presupuesto: number | null | undefined) => {
+    if (!presupuesto || presupuesto === 0) return "No especificado";
+    return new Intl.NumberFormat("es-EC", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(presupuesto);
+  };
+
   const obtenerPersonaAResenar = (servicio: ServicioInfo) => {
     if (servicio.cliente_id === usuarioId) return servicio.trabajador;
     return servicio.cliente;
+  };
+
+  const obtenerDescripcionServicio = (servicio: ServicioInfo): string => {
+    const descripcion = servicio.solicitud?.descripcion;
+    const titulo = servicio.solicitud?.titulo;
+    const zona = servicio.solicitud?.zona;
+    
+    if (descripcion && descripcion.trim()) return descripcion;
+    if (titulo && titulo.trim()) return titulo;
+    if (zona && zona.trim()) return `Servicio en ${zona}`;
+    return "Servicio finalizado";
   };
 
   const cambiarPuntuacion = (servicioId: string, puntuacion: number) => {
@@ -434,18 +426,41 @@ export default function ResenasView() {
       return;
     }
 
-    if (!formulario || formulario.puntuacion < 1) {
-      setError("Selecciona una calificación antes de publicar.");
+    if (!formulario || formulario.puntuacion < 1 || formulario.puntuacion > 5) {
+      setError("Selecciona una calificación válida (1-5 estrellas) antes de publicar.");
       return;
     }
 
     const esCliente = servicio.cliente_id === usuarioId;
     const usuarioCalificadoId = esCliente ? servicio.trabajador_id : servicio.cliente_id;
 
+    if (!usuarioCalificadoId) {
+      setError("No se pudo identificar a la persona a calificar.");
+      return;
+    }
+
     try {
       setGuardandoId(servicio.id);
 
-      const { error } = await supabase.from("resenas").insert({
+      const { data: resenasExistentes, error: errorVerificacion } = await supabase
+        .from("resenas")
+        .select("id")
+        .eq("servicio_id", servicio.id)
+        .eq("autor_id", usuarioId);
+
+      if (errorVerificacion) {
+        setError(`Error al verificar: ${errorVerificacion.message}`);
+        setGuardandoId(null);
+        return;
+      }
+
+      if (resenasExistentes && resenasExistentes.length > 0) {
+        setError("Ya publicaste una reseña para este servicio.");
+        setGuardandoId(null);
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("resenas").insert({
         servicio_id: servicio.id,
         autor_id: usuarioId,
         usuario_calificado_id: usuarioCalificadoId,
@@ -453,19 +468,15 @@ export default function ResenasView() {
         comentario: formulario.comentario.trim() || null,
       });
 
-      if (error) {
-        console.error("Error al guardar reseña:", error);
-
-        if (String(error.message || "").toLowerCase().includes("duplicate")) {
-          setError("Ya publicaste una reseña para este servicio.");
-          return;
-        }
-
-        setError("No se pudo publicar la reseña.");
+      if (insertError) {
+        setError(`No se pudo publicar: ${insertError.message}`);
+        setGuardandoId(null);
         return;
       }
 
-      setMensaje("Reseña publicada correctamente.");
+      await actualizarPromedioTrabajador(usuarioCalificadoId);
+
+      setMensaje("¡Reseña publicada correctamente!");
 
       setFormularios((prev) => {
         const copia = { ...prev };
@@ -476,7 +487,7 @@ export default function ResenasView() {
       await cargarResenas();
       setTab("realizadas");
     } catch (error) {
-      console.error("Error inesperado al guardar reseña:", error);
+      console.error("Error al guardar reseña:", error);
       setError("Ocurrió un error inesperado al publicar la reseña.");
     } finally {
       setGuardandoId(null);
@@ -636,7 +647,9 @@ export default function ResenasView() {
           estilos={estilos}
           modoOscuro={modoOscuro}
           formatearFecha={formatearFecha}
+          formatearPresupuesto={formatearPresupuesto}
           obtenerPersonaAResenar={obtenerPersonaAResenar}
+          obtenerDescripcionServicio={obtenerDescripcionServicio}
           cambiarPuntuacion={cambiarPuntuacion}
           cambiarComentario={cambiarComentario}
           guardarResena={guardarResena}
@@ -648,6 +661,7 @@ export default function ResenasView() {
           estilos={estilos}
           modoOscuro={modoOscuro}
           formatearFecha={formatearFecha}
+          formatearPresupuesto={formatearPresupuesto}
         />
       ) : (
         <ListaResenas
@@ -656,6 +670,7 @@ export default function ResenasView() {
           estilos={estilos}
           modoOscuro={modoOscuro}
           formatearFecha={formatearFecha}
+          formatearPresupuesto={formatearPresupuesto}
         />
       )}
     </div>
@@ -738,7 +753,9 @@ function ListaPendientes({
   estilos,
   modoOscuro,
   formatearFecha,
+  formatearPresupuesto,
   obtenerPersonaAResenar,
+  obtenerDescripcionServicio,
   cambiarPuntuacion,
   cambiarComentario,
   guardarResena,
@@ -750,7 +767,9 @@ function ListaPendientes({
   estilos: { textoPrincipal: string; textoSecundario: string };
   modoOscuro: boolean;
   formatearFecha: (fecha: string | null) => string;
+  formatearPresupuesto: (presupuesto: number | null | undefined) => string;
   obtenerPersonaAResenar: (servicio: ServicioInfo) => PerfilInfo | null;
+  obtenerDescripcionServicio: (servicio: ServicioInfo) => string;
   cambiarPuntuacion: (servicioId: string, puntuacion: number) => void;
   cambiarComentario: (servicioId: string, comentario: string) => void;
   guardarResena: (servicio: ServicioInfo) => void;
@@ -772,6 +791,8 @@ function ListaPendientes({
           puntuacion: 0,
           comentario: "",
         };
+        const descripcion = obtenerDescripcionServicio(servicio);
+        const esCliente = servicio.cliente_id === usuarioId;
 
         return (
           <div
@@ -781,7 +802,7 @@ function ListaPendientes({
             }`}
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="flex-1 min-w-0">
                 <div
                   className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold text-[#0B3C7F] mb-3 ${
                     modoOscuro ? "bg-[#172554]" : "bg-[#e7f0ff]"
@@ -795,13 +816,22 @@ function ListaPendientes({
                   {servicio.solicitud?.titulo || "Servicio finalizado"}
                 </h3>
 
-                <p className={`text-sm mt-1 line-clamp-2 ${estilos.textoSecundario}`}>
-                  {servicio.solicitud?.descripcion || "Sin descripción disponible."}
+                <p className={`text-sm mt-2 line-clamp-2 ${estilos.textoSecundario}`}>
+                  {descripcion}
                 </p>
+
+                {servicio.solicitud?.zona && (
+                  <div className="flex items-center gap-1 mt-2">
+                    <MapPin className="w-3 h-3 text-gray-400" />
+                    <p className={`text-xs ${estilos.textoSecundario}`}>
+                      {servicio.solicitud.zona}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <span
-                className={`px-3 py-1 rounded-full text-xs font-bold ${
+                className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 ${
                   modoOscuro ? "bg-green-950 text-green-300" : "bg-green-100 text-green-700"
                 }`}
               >
@@ -809,46 +839,57 @@ function ListaPendientes({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               <InfoItem
                 icon={<CalendarDays className="w-4 h-4" />}
-                label="Fecha"
+                label="Fecha finalización"
                 value={formatearFecha(servicio.finalizado_en || servicio.creado_en)}
                 estilos={estilos}
               />
 
               <InfoItem
-                icon={<ClipboardList className="w-4 h-4" />}
-                label="Rol"
-                value={servicio.cliente_id === usuarioId ? "Cliente" : "Trabajador"}
+    icon={<UserRound className="w-4 h-4" />}
+    label="Estás calificando a"
+    value={esCliente ? "Trabajador del servicio" : "Cliente del servicio"}
+    estilos={estilos}
+  />
+
+              <InfoItem
+                icon={<DollarSign className="w-4 h-4" />}
+                label="Presupuesto"
+                value={formatearPresupuesto(servicio.solicitud?.presupuesto)}
                 estilos={estilos}
               />
             </div>
-
-            <div
-              className={`mt-4 rounded-2xl border p-4 ${
-                modoOscuro ? "border-[#334155] bg-[#0f172a]" : "border-gray-100 bg-gray-50"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Avatar perfil={persona} />
-
-                <div className="min-w-0">
-                  <p className={`font-extrabold truncate ${estilos.textoPrincipal}`}>
-                    {persona?.nombre_completo || "Usuario"}
-                  </p>
-
-                  <p className={`text-xs truncate ${estilos.textoSecundario}`}>
-                    {persona?.zona || servicio.solicitud?.zona || "Zona no definida"}
-                  </p>
-                </div>
-              </div>
-            </div>
+{/* Persona a calificar */}
+<div
+  className={`mt-4 rounded-2xl border p-4 ${
+    modoOscuro ? "border-[#334155] bg-[#0f172a]" : "border-gray-100 bg-gray-50"
+  }`}
+>
+  <div className="flex items-center gap-3">
+    <Avatar perfil={persona} />
+    <div className="min-w-0 flex-1">
+      <p className={`text-xs font-bold ${estilos.textoSecundario}`}>
+        {esCliente ? "Trabajador que realizó el servicio" : "Cliente que contrató el servicio"}
+      </p>
+      <p className={`font-extrabold truncate ${estilos.textoPrincipal}`}>
+        {persona?.nombre_completo || "Usuario"}
+      </p>
+      <p className={`text-xs truncate ${estilos.textoSecundario}`}>
+        {persona?.zona || "Zona no definida"}
+      </p>
+    </div>
+    {persona?.verificado && (
+      <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
+    )}
+  </div>
+</div>
 
             <div className="mt-5">
               <p className={`text-sm font-bold ${estilos.textoPrincipal}`}>
-                ¿Cómo fue tu experiencia?
-              </p>
+  ¿Cómo fue tu experiencia con {esCliente ? "este trabajador" : "este cliente"}?
+</p>
 
               <div className="flex items-center gap-1 mt-3">
                 {[1, 2, 3, 4, 5].map((estrella) => (
@@ -877,7 +918,7 @@ function ListaPendientes({
                 value={formulario.comentario}
                 onChange={(e) => cambiarComentario(servicio.id, e.target.value)}
                 rows={3}
-                placeholder="Escribe un comentario breve..."
+                placeholder="Cuéntanos sobre tu experiencia. ¿Qué te pareció el servicio?"
                 className={`mt-3 w-full resize-none rounded-2xl border p-3 outline-none ${
                   modoOscuro
                     ? "bg-[#0f172a] border-[#334155] text-white placeholder:text-gray-500"
@@ -907,12 +948,14 @@ function ListaResenas({
   estilos,
   modoOscuro,
   formatearFecha,
+  formatearPresupuesto,
 }: {
   resenas: ResenaInfo[];
   tipo: "recibidas" | "realizadas";
   estilos: { textoPrincipal: string; textoSecundario: string };
   modoOscuro: boolean;
   formatearFecha: (fecha: string | null) => string;
+  formatearPresupuesto: (presupuesto: number | null | undefined) => string;
 }) {
   if (resenas.length === 0) {
     return (
@@ -930,45 +973,77 @@ function ListaResenas({
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
       {resenas.map((resena) => {
-        const perfil =
-          tipo === "recibidas" ? resena.autor : resena.usuario_calificado;
+        const perfil = tipo === "recibidas" ? resena.autor : resena.usuario_calificado;
+        const esRecibida = tipo === "recibidas";
 
         return (
           <div
             key={resena.id}
             className={`rounded-[22px] border p-5 ${
-              modoOscuro
-                ? "bg-[#111827] border-[#334155]"
-                : "bg-white border-gray-200"
+              modoOscuro ? "bg-[#111827] border-[#334155]" : "bg-white border-gray-200"
             }`}
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <Avatar perfil={perfil || null} />
-
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className={`text-xs font-bold ${estilos.textoSecundario}`}>
-                    {tipo === "recibidas" ? "Te calificó" : "Calificaste a"}
+                    {esRecibida ? "Te calificó" : "Calificaste a"}
                   </p>
-
                   <h3 className={`text-lg font-extrabold truncate ${estilos.textoPrincipal}`}>
                     {perfil?.nombre_completo || "Usuario"}
                   </h3>
-
-                  <p className={`text-sm mt-1 truncate ${estilos.textoSecundario}`}>
-                    {resena.servicio?.solicitud?.titulo || "Servicio finalizado"}
-                  </p>
+                  {perfil?.zona && (
+                    <p className={`text-xs truncate ${estilos.textoSecundario}`}>
+                      {perfil.zona}
+                    </p>
+                  )}
                 </div>
               </div>
-
               <span
-                className={`px-3 py-1 rounded-full text-xs font-bold ${
+                className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 ${
                   modoOscuro ? "bg-blue-950 text-blue-300" : "bg-blue-100 text-blue-700"
                 }`}
               >
                 {formatearFecha(resena.creado_en)}
               </span>
             </div>
+
+            {resena.servicio?.solicitud && (
+              <div className={`mt-4 rounded-2xl p-3 ${
+                modoOscuro ? "bg-[#0f172a]" : "bg-gray-50"
+              }`}>
+                <p className={`text-xs font-bold mb-1 ${estilos.textoSecundario}`}>
+                  Servicio
+                </p>
+                <p className={`text-sm font-semibold ${estilos.textoPrincipal}`}>
+                  {resena.servicio.solicitud.titulo || "Servicio finalizado"}
+                </p>
+                {resena.servicio.solicitud.descripcion && (
+                  <p className={`text-xs mt-1 line-clamp-2 ${estilos.textoSecundario}`}>
+                    {resena.servicio.solicitud.descripcion}
+                  </p>
+                )}
+                <div className="flex items-center gap-3 mt-2">
+                  {resena.servicio.solicitud.zona && (
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-gray-400" />
+                      <span className={`text-xs ${estilos.textoSecundario}`}>
+                        {resena.servicio.solicitud.zona}
+                      </span>
+                    </div>
+                  )}
+                  {resena.servicio.solicitud.presupuesto && (
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-3 h-3 text-gray-400" />
+                      <span className={`text-xs ${estilos.textoSecundario}`}>
+                        {formatearPresupuesto(resena.servicio.solicitud.presupuesto)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 flex items-center gap-2">
               <Estrellas valor={resena.puntuacion} modoOscuro={modoOscuro} />
@@ -984,22 +1059,6 @@ function ListaResenas({
             >
               {resena.comentario || "Sin comentario adicional."}
             </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-              <InfoItem
-                icon={<ClipboardList className="w-4 h-4" />}
-                label="Servicio"
-                value={resena.servicio?.solicitud?.titulo || "No definido"}
-                estilos={estilos}
-              />
-
-              <InfoItem
-                icon={<ShieldCheck className="w-4 h-4" />}
-                label="Estado"
-                value="Finalizado"
-                estilos={estilos}
-              />
-            </div>
           </div>
         );
       })}
@@ -1010,11 +1069,15 @@ function ListaResenas({
 function Avatar({ perfil }: { perfil: PerfilInfo | null }) {
   if (perfil?.foto_url) {
     return (
-      <img
-        src={perfil.foto_url}
-        alt={perfil.nombre_completo || "Usuario"}
-        className="w-12 h-12 rounded-2xl object-cover border border-gray-200"
-      />
+      <div className="relative w-12 h-12 rounded-2xl overflow-hidden border border-gray-200">
+        <Image
+          src={perfil.foto_url}
+          alt={perfil.nombre_completo || "Usuario"}
+          fill
+          className="object-cover"
+          sizes="48px"
+        />
+      </div>
     );
   }
 
@@ -1066,9 +1129,7 @@ function InfoItem({
       <div className="text-[#0B3C7F] mt-0.5">{icon}</div>
       <div>
         <p className={`text-xs font-bold ${estilos.textoSecundario}`}>{label}</p>
-        <p className={`text-sm font-semibold ${estilos.textoPrincipal}`}>
-          {value}
-        </p>
+        <p className={`text-sm font-semibold ${estilos.textoPrincipal}`}>{value}</p>
       </div>
     </div>
   );
@@ -1092,7 +1153,6 @@ function Vacio({
       <div className="mx-auto w-14 h-14 rounded-2xl bg-[#e7f0ff] text-[#0B3C7F] flex items-center justify-center mb-4">
         <MessageSquare className="w-7 h-7" />
       </div>
-
       <p className="font-bold">{texto}</p>
     </div>
   );
