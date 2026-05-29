@@ -614,7 +614,7 @@ export default function HistorialView() {
             </h1>
 
             <p className={`mt-2 ${estilos.textoSecundario}`}>
-              Revisa tus solicitudes, propuestas, cambios de estado, pagos, reportes y
+              Revisa tus solicitudes, propuestas, cambios de estado, reportes y
               reseñas en un solo lugar.
             </p>
           </div>
@@ -640,14 +640,6 @@ export default function HistorialView() {
           modoOscuro={modoOscuro}
         />
 
-        <ResumenCard
-          icon={<CreditCard className="w-5 h-5" />}
-          titulo="Pagos"
-          valor={String(totalPagos)}
-          detalle="Movimientos manuales"
-          estilos={estilos}
-          modoOscuro={modoOscuro}
-        />
 
         <ResumenCard
           icon={<Flag className="w-5 h-5" />}
@@ -717,12 +709,7 @@ export default function HistorialView() {
               onClick={() => setFiltro("estado")}
               modoOscuro={modoOscuro}
             />
-            <FiltroButton
-              activo={filtro === "pago"}
-              texto="Pagos"
-              onClick={() => setFiltro("pago")}
-              modoOscuro={modoOscuro}
-            />
+            
             <FiltroButton
               activo={filtro === "reporte"}
               texto="Reportes"
