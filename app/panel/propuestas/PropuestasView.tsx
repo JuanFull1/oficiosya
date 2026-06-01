@@ -119,8 +119,6 @@ type CachePropuestas = {
   invitacionesEnviadas: InvitacionEnviada[];
 };
 
-const CACHE_KEY = "oficiosya-propuestas-cache";
-
 export default function PropuestasView() {
   const { estilos, modoOscuro } = usePanelContext();
 
@@ -169,30 +167,6 @@ export default function PropuestasView() {
       month: "short",
       year: "numeric",
     });
-  };
-
-  const guardarCache = (data: CachePropuestas) => {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-    } catch {
-      console.warn("No se pudo guardar el caché de propuestas.");
-    }
-  };
-
-  const cargarCache = () => {
-    try {
-      const cache = localStorage.getItem(CACHE_KEY);
-      if (!cache) return;
-
-      const data = JSON.parse(cache) as CachePropuestas;
-
-      setPropuestasEnviadas(data.propuestasEnviadas || []);
-      setPropuestasRecibidas(data.propuestasRecibidas || []);
-      setInvitacionesRecibidas(data.invitacionesRecibidas || []);
-      setInvitacionesEnviadas(data.invitacionesEnviadas || []);
-    } catch {
-      console.warn("No se pudo leer el caché de propuestas.");
-    }
   };
 
   const cargarPropuestas = async () => {
@@ -517,19 +491,10 @@ export default function PropuestasView() {
           };
         });
 
-      const cacheData: CachePropuestas = {
-        propuestasEnviadas: propuestasEnviadasFormateadas,
-        propuestasRecibidas: propuestasRecibidasFormateadas,
-        invitacionesRecibidas: invitacionesRecibidasFormateadas,
-        invitacionesEnviadas: invitacionesEnviadasFormateadas,
-      };
-
-      setPropuestasEnviadas(cacheData.propuestasEnviadas);
-      setPropuestasRecibidas(cacheData.propuestasRecibidas);
-      setInvitacionesRecibidas(cacheData.invitacionesRecibidas);
-      setInvitacionesEnviadas(cacheData.invitacionesEnviadas);
-
-      guardarCache(cacheData);
+      setPropuestasEnviadas(propuestasEnviadasFormateadas);
+      setPropuestasRecibidas(propuestasRecibidasFormateadas);
+      setInvitacionesRecibidas(invitacionesRecibidasFormateadas);
+      setInvitacionesEnviadas(invitacionesEnviadasFormateadas);
     } catch (error) {
       console.error("Error inesperado al cargar propuestas:", error);
       setError("No se pudieron actualizar las propuestas.");
@@ -537,13 +502,11 @@ export default function PropuestasView() {
   };
 
   useEffect(() => {
-  const timeout = window.setTimeout(() => {
-    cargarCache();
-    cargarPropuestas();
-  }, 0);
-
-  return () => window.clearTimeout(timeout);
-}, []);
+    const loadData = async () => {
+      await cargarPropuestas();
+    };
+    loadData();
+  }, []);
 
   const actualizarEstadoLocal = (
     propuestaId: string,
@@ -632,8 +595,11 @@ export default function PropuestasView() {
       return;
     }
 
-    if (solicitud.cliente_id !== user.id) {
-      setError("Solo el cliente dueño de la solicitud puede aceptar propuestas.");
+    const esCliente = solicitud.cliente_id === user.id;
+    const esTrabajadorInvitado = propuesta.trabajador_id === user.id;
+
+    if (!esCliente && !esTrabajadorInvitado) {
+      setError("No tienes permiso para aceptar esta propuesta.");
       cargarPropuestas();
       return;
     }

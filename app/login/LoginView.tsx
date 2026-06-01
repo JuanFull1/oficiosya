@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
@@ -22,6 +22,34 @@ function LoginViewContenido() {
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    // Limpiar cualquier sesión残留 al cargar la página de login
+    const limpiarSesionAlInicio = async () => {
+      // Limpiar todos los cachés
+      const cacheKeys = [
+        'oficiosya-panel-cache',
+        'oficiosya-propuestas-cache',
+        'oficiosya-resenas-cache',
+        'oficiosya-trabajador-cache-v2'
+      ];
+      cacheKeys.forEach(key => localStorage.removeItem(key));
+      
+      // Limpiar claves de Supabase
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      sessionStorage.clear();
+      
+      // Cerrar cualquier sesión activa en Supabase
+      await supabase.auth.signOut();
+    };
+    
+    limpiarSesionAlInicio();
+  }, []);
 
   const errorUrl = searchParams.get("error");
 

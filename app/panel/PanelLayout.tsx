@@ -336,9 +336,30 @@ export default function PanelLayout({ children }: PanelLayoutProps) {
   }, [router]);
 
   const cerrarSesion = async () => {
-    localStorage.removeItem(CACHE_KEY);
+    // Limpiar todos los cachés de la aplicación
+    const cacheKeys = [
+      'oficiosya-panel-cache',
+      'oficiosya-propuestas-cache', 
+      'oficiosya-resenas-cache',
+      'oficiosya-trabajador-cache-v2'
+    ];
+    cacheKeys.forEach(key => localStorage.removeItem(key));
+    
+    // Limpiar TODAS las claves de sesión de Supabase (empiezan con 'sb-')
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Limpiar sessionStorage por completo
+    sessionStorage.clear();
+    
+    // Cerrar sesión en Supabase
     await supabase.auth.signOut();
-    router.replace("/login");
+    
+    // Redirigir al login (replace evita que la flecha atrás vuelva al panel)
+    router.replace('/login');
   };
 
   const nombreMostrar = montado
