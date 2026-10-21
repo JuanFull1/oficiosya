@@ -1,0 +1,95 @@
+
+name: Solicitud de cambio
+description: Registrar una solicitud de cambio para su evaluacion y aprobacion
+title: "[CAMBIO] "
+labels: ["solicitud-de-cambio"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Formulario de control de cambios
+        Complete la informacion solicitada para registrar
+        un cambio en el sistema.
+
+        La solicitud debe ser evaluada y aprobada
+        antes de iniciar su implementacion.
+
+  - type: input
+    id: componente
+    attributes:
+      label: Sistema o componente afectado
+      description: Indique el modulo donde se realizara el cambio.
+      placeholder: "Ejemplo: Modulo de reservas"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo de cambio
+      description: Seleccione la categoria del cambio.
+      options:
+        - Correctivo
+        - Adaptativo
+        - Mejora
+        - Preventivo
+    validations:
+      required: true
+
+  - type: dropdown
+    id: prioridad
+    attributes:
+      label: Prioridad propuesta
+      description: Indique la importancia del cambio.
+      options:
+        - Alta
+        - Media
+        - Baja
+    validations:
+      required: true
+
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripcion del cambio
+      description: Explique que modificacion se necesita realizar.
+      placeholder: "Describa la funcionalidad solicitada."
+    validations:
+      required: true
+
+  - type: textarea
+    id: justificacion
+    attributes:
+      label: Justificacion
+      description: Explique por que es necesario realizar el cambio.
+      placeholder: "Indique el problema o necesidad."
+    validations:
+      required: true
+
+  - type: textarea
+    id: impacto
+    attributes:
+      label: Impacto y riesgos conocidos
+      description: Indique los componentes afectados y posibles riesgos.
+      placeholder: "Describa el impacto y los riesgos identificados."
+    validations:
+      required: false
+
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptacion
+      description: Indique las condiciones para aceptar el cambio.
+      placeholder: "Ejemplo: El filtro debe mostrar reservas entre dos fechas."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmacion
+    attributes:
+      label: Confirmacion
+      description: Verifique la siguiente condicion antes de enviar.
+      options:
+        - label: He verificado que no existe una solicitud duplicada.
+          required: true
